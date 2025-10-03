@@ -8,6 +8,7 @@ pub struct Tenant {
     pub admin: String,
     pub created_at: DateTime<Utc>,
     pub salt: [u8; 32],
+    pub password_hash: [u8; 32], // Hash of the master password for validation
     pub settings: TenantSettings,
 }
 
@@ -59,6 +60,19 @@ impl Tenant {
             admin,
             created_at: Utc::now(),
             salt,
+            password_hash: [0u8; 32], // Will be set during init_tenant_with_password
+            settings: TenantSettings::default(),
+        }
+    }
+    
+    pub fn new_with_password(id: String, name: String, admin: String, salt: [u8; 32], password_hash: [u8; 32]) -> Self {
+        Self {
+            id,
+            name,
+            admin,
+            created_at: Utc::now(),
+            salt,
+            password_hash,
             settings: TenantSettings::default(),
         }
     }

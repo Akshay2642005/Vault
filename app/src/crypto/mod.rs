@@ -31,8 +31,8 @@ pub struct EncryptedData {
 }
 
 pub struct MasterKey {
-    key: Secret<[u8; 32]>,
-    algorithm: EncryptionAlgorithm,
+    pub(crate) key: Secret<[u8; 32]>,
+    pub(crate) algorithm: EncryptionAlgorithm,
 }
 
 impl MasterKey {

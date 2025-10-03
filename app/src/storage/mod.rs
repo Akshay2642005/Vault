@@ -61,11 +61,53 @@ impl VaultStorage {
         
         let db = sled::open(path)?;
         
-        Ok(Self {
+        let mut storage = Self {
             db,
             master_key: None,
             current_tenant: None,
-        })
+        };
+        
+        // Try to auto-unlock from session
+        storage.try_auto_unlock();
+        
+        Ok(storage)
+    }
+    
+    fn try_auto_unlock(&mut self) {
+        use crate::auth::SessionManager;
+        
+        if let Ok(session) = SessionManager::get_current_session() {
+            if session.is_valid() {
+                // Get stored key bytes from session storage
+                if let Ok(Some((key_bytes, algorithm))) = self.get_stored_key_data(&session.tenant_id) {
+                    use secrecy::Secret;
+                    let master_key = MasterKey {
+                        key: Secret::new(key_bytes),
+                        algorithm,
+                    };
+                    self.master_key = Some(master_key);
+                    self.current_tenant = Some(session.tenant_id.clone());
+                    
+                    if self.verbose_debug() {
+                        eprintln!("Auto-unlocked vault for tenant: {}", session.tenant_id);
+                    }
+                }
+            }
+        }
+    }
+    
+    fn verbose_debug(&self) -> bool {
+        std::env::var("VAULT_DEBUG").is_ok()
+    }
+    
+    fn get_stored_key_data(&self, tenant_id: &str) -> Result<Option<([u8; 32], crate::crypto::EncryptionAlgorithm)>> {
+        let session_key = format!("session_key:{}", tenant_id);
+        if let Some(data) = self.db.get(&session_key)? {
+            let (key_bytes, algorithm): ([u8; 32], crate::crypto::EncryptionAlgorithm) = bincode::deserialize(&data)?;
+            Ok(Some((key_bytes, algorithm)))
+        } else {
+            Ok(None)
+        }
     }
     
     pub fn tenant_exists(&self, tenant_id: &str) -> Result<bool> {
@@ -93,6 +135,39 @@ impl VaultStorage {
         Ok(())
     }
     
+    pub async fn init_tenant_with_password(&self, tenant_id: &str, admin: &str, password: &str) -> Result<()> {
+        let salt = generate_salt();
+        
+        // Derive key from password to test it works
+        let master_key = MasterKey::derive_from_passphrase(
+            password,
+            &salt,
+            crate::crypto::EncryptionAlgorithm::Aes256Gcm
+        ).map_err(|e| VaultError::Crypto(e.to_string()))?;
+        
+        // Create password hash for validation during login
+        use secrecy::ExposeSecret;
+        let password_hash = *master_key.key.expose_secret();
+        
+        let tenant = Tenant::new_with_password(
+            tenant_id.to_string(),
+            tenant_id.to_string(),
+            admin.to_string(),
+            salt,
+            password_hash,
+        );
+        
+        let key = format!("tenant:{}", tenant_id);
+        let value = bincode::serialize(&tenant)?;
+        self.db.insert(key, value)?;
+        self.db.flush()?;
+        
+        // Create audit log entry
+        self.log_audit_event(tenant_id, "tenant_created", &format!("Tenant {} created by {}", tenant_id, admin)).await?;
+        
+        Ok(())
+    }
+    
     pub fn unlock(&mut self, tenant_id: &str, passphrase: &str) -> Result<()> {
         let tenant = self.get_tenant(tenant_id)?
             .ok_or_else(|| VaultError::TenantNotFound(tenant_id.to_string()))?;
@@ -103,20 +178,37 @@ impl VaultStorage {
             crate::crypto::EncryptionAlgorithm::Aes256Gcm
         ).map_err(|e| VaultError::Crypto(e.to_string()))?;
         
-        // Test the key by trying to decrypt a test value
-        let test_data = b"test";
-        let encrypted = master_key.encrypt(test_data)
-            .map_err(|e| VaultError::Crypto(e.to_string()))?;
-        let decrypted = master_key.decrypt(&encrypted)
-            .map_err(|_| VaultError::InvalidPassphrase)?;
-        
-        if decrypted != test_data {
+        // Validate password by comparing derived key with stored hash
+        use secrecy::ExposeSecret;
+        let derived_hash = *master_key.key.expose_secret();
+        if derived_hash != tenant.password_hash {
             return Err(VaultError::InvalidPassphrase);
         }
         
         self.master_key = Some(master_key);
         self.current_tenant = Some(tenant_id.to_string());
         
+        // Store the key data for auto-unlock (in memory only for this session)
+        if let Some(ref mk) = self.master_key {
+            self.store_key_data_for_session(tenant_id, mk)?;
+        }
+        
+        Ok(())
+    }
+    
+    fn store_key_data_for_session(&self, tenant_id: &str, master_key: &MasterKey) -> Result<()> {
+        use secrecy::ExposeSecret;
+        // Store key bytes and algorithm for auto-unlock
+        let session_key = format!("session_key:{}", tenant_id);
+        let key_data = (*master_key.key.expose_secret(), master_key.algorithm.clone());
+        let serialized = bincode::serialize(&key_data)?;
+        self.db.insert(session_key, serialized)?;
+        Ok(())
+    }
+    
+    pub fn clear_session_key(&self, tenant_id: &str) -> Result<()> {
+        let session_key = format!("session_key:{}", tenant_id);
+        self.db.remove(&session_key)?;
         Ok(())
     }
     

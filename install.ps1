@@ -64,7 +64,7 @@ try {
     Write-ColorOutput "🔨 Building from source..." $Blue
     
     Set-Location $TmpDir
-    git clone "https://github.com/vault/vault" vault-src
+    git clone "https://github.com/Akshay2642005/Vault" vault-src
     Set-Location "vault-src\app"
     
     Write-ColorOutput "🔧 Compiling (this may take a few minutes)..." $Blue

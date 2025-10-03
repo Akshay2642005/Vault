@@ -25,12 +25,24 @@ pub async fn init_command(
         }
     }
     
+    // Ask for master password
+    let master_password = Password::new()
+        .with_prompt("Create master password")
+        .with_confirmation("Confirm master password", "Passwords do not match")
+        .interact()?;
+    
+    // Validate password strength
+    if master_password.len() < 8 {
+        output::print_error("Master password must be at least 8 characters long");
+        return Ok(());
+    }
+    
     let pb = ProgressBar::new_spinner();
     pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
     pb.set_message("Initializing vault...");
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
     
-    storage.init_tenant(tenant, admin).await?;
+    storage.init_tenant_with_password(tenant, admin, &master_password).await?;
     
     pb.finish_with_message(format!("{} Vault initialized for tenant: {}", "✓".green(), tenant.cyan()));
     println!("Admin: {}", admin.cyan());
@@ -102,6 +114,15 @@ pub async fn logout_command() -> Result<()> {
             session.user_id,
         );
         let _ = AuditLogger::log_event(&audit_entry);
+        
+        // Clear session key from storage
+        let config_path = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".vault")
+            .join("vault.db");
+        if let Ok(storage) = VaultStorage::new(&config_path.to_string_lossy()) {
+            let _ = storage.clear_session_key(&session.tenant_id);
+        }
         
         SessionManager::clear_session()?;
         output::print_success("Logged out successfully");
