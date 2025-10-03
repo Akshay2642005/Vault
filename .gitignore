@@ -37,7 +37,7 @@ session
 .env
 .env.local
 .env.*.local
-
+.amazonq/
 # Temporary files
 *.tmp
 *.temp
