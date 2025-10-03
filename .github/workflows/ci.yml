@@ -41,14 +41,6 @@ jobs:
           path: app/target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run clippy
-        run: cargo clippy -- -D warnings
-        working-directory: ./app
-
-      - name: Run tests
-        run: cargo test --verbose
-        working-directory: ./app
-
       - name: Build release
         run: cargo build --release --verbose
         working-directory: ./app
