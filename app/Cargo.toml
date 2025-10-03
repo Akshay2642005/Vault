@@ -1,12 +1,12 @@
 [package]
-name = "vault-cli"
+name = "rvault"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Akshay B <akshay2642005@gmail.com>"]
 description = "A local-first, multi-tenant password manager with cloud sync capabilities"
 documentation = "https://docs.rs/vault-cli"
 homepage = "https://vault.dev"
-repository = "https://github.com/yourusername/vault"
+repository = "https://github.com/Akshay2642005/Vault"
 license = "MIT"
 keywords = ["password", "manager", "security", "encryption", "cli"]
 categories = ["command-line-utilities", "cryptography", "authentication"]
