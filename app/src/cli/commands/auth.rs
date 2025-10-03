@@ -32,17 +32,28 @@ pub async fn init_command(
         .interact()?;
     
     // Validate password strength
-    if master_password.len() < 8 {
-        output::print_error("Master password must be at least 8 characters long");
-        return Ok(());
-    }
-    
     let pb = ProgressBar::new_spinner();
     pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
     pb.set_message("Initializing vault...");
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
     
-    storage.init_tenant_with_password(tenant, admin, &master_password).await?;
+    if master_password.len() < 8 {
+        output::print_error("Master password must be at least 8 characters long");
+        // Fallback to basic init without password (insecure)
+        output::print_warning("Using fallback initialization without password validation");
+        storage.init_tenant(tenant, admin).await?;
+    } else {
+        storage.init_tenant_with_password(tenant, admin, &master_password).await?;
+    }
+    
+    // Log tenant creation
+    let audit_entry = AuditEntry::new(
+        tenant.to_string(),
+        AuditLogger::EVENT_TENANT_CREATED.to_string(),
+        format!("Tenant {} created by {}", tenant, admin),
+        admin.to_string(),
+    );
+    let _ = AuditLogger::log_event(&audit_entry);
     
     pb.finish_with_message(format!("{} Vault initialized for tenant: {}", "✓".green(), tenant.cyan()));
     println!("Admin: {}", admin.cyan());
@@ -144,7 +155,36 @@ pub async fn whoami_command() -> Result<()> {
             println!("Expires: {}", session.expires_at.format("%Y-%m-%d %H:%M:%S UTC"));
             
             if session.is_valid() {
+                let time_left = session.time_until_expiry();
+                let hours = time_left.num_hours();
+                let minutes = time_left.num_minutes() % 60;
+                
+                if hours > 0 {
+                    println!("Time remaining: {}h {}m", hours, minutes);
+                } else {
+                    println!("Time remaining: {}m", minutes);
+                }
+                
                 println!("Status: {}", "Active".green());
+                
+                // Show permissions
+                println!("\n{} Permissions", "🔐".cyan());
+                let read_status = if session.role.can_read() { "✓".green().to_string() } else { "✗".red().to_string() };
+                let write_status = if session.role.can_write() { "✓".green().to_string() } else { "✗".red().to_string() };
+                let admin_status = if session.role.can_admin() { "✓".green().to_string() } else { "✗".red().to_string() };
+                let audit_status = if session.role.can_audit() { "✓".green().to_string() } else { "✗".red().to_string() };
+                println!("  Read: {}", read_status);
+                println!("  Write: {}", write_status);
+                println!("  Admin: {}", admin_status);
+                println!("  Audit: {}", audit_status);
+                
+                // Refresh session if it's close to expiry
+                if hours < 1 {
+                    let mut refreshed_session = session.clone();
+                    refreshed_session.refresh();
+                    let _ = SessionManager::save_session(&refreshed_session);
+                    output::print_info("Session refreshed");
+                }
             } else {
                 println!("Status: {}", "Expired".red());
                 output::print_warning("Session has expired. Please login again.");

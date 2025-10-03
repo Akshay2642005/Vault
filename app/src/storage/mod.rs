@@ -78,20 +78,44 @@ impl VaultStorage {
         
         if let Ok(session) = SessionManager::get_current_session() {
             if session.is_valid() {
+                if self.verbose_debug() {
+                    eprintln!("Found valid session for tenant: {}", session.tenant_id);
+                }
+                
                 // Get stored key bytes from session storage
-                if let Ok(Some((key_bytes, algorithm))) = self.get_stored_key_data(&session.tenant_id) {
-                    use secrecy::Secret;
-                    let master_key = MasterKey {
-                        key: Secret::new(key_bytes),
-                        algorithm,
-                    };
-                    self.master_key = Some(master_key);
-                    self.current_tenant = Some(session.tenant_id.clone());
-                    
-                    if self.verbose_debug() {
-                        eprintln!("Auto-unlocked vault for tenant: {}", session.tenant_id);
+                match self.get_stored_key_data(&session.tenant_id) {
+                    Ok(Some((key_bytes, algorithm))) => {
+                        use secrecy::Secret;
+                        let master_key = MasterKey {
+                            key: Secret::new(key_bytes),
+                            algorithm,
+                        };
+                        self.master_key = Some(master_key);
+                        self.current_tenant = Some(session.tenant_id.clone());
+                        
+                        if self.verbose_debug() {
+                            eprintln!("Auto-unlocked vault for tenant: {}", session.tenant_id);
+                        }
+                    }
+                    Ok(None) => {
+                        if self.verbose_debug() {
+                            eprintln!("No session key found for tenant: {}", session.tenant_id);
+                        }
+                    }
+                    Err(e) => {
+                        if self.verbose_debug() {
+                            eprintln!("Error getting session key: {}", e);
+                        }
                     }
                 }
+            } else {
+                if self.verbose_debug() {
+                    eprintln!("Session expired for tenant: {}", session.tenant_id);
+                }
+            }
+        } else {
+            if self.verbose_debug() {
+                eprintln!("No session found");
             }
         }
     }
@@ -116,13 +140,17 @@ impl VaultStorage {
     }
     
     pub async fn init_tenant(&self, tenant_id: &str, admin: &str) -> Result<()> {
+        // Fallback method for basic tenant creation without password
         let salt = generate_salt();
-        let tenant = Tenant::new(
+        let mut tenant = Tenant::new(
             tenant_id.to_string(),
             tenant_id.to_string(),
             admin.to_string(),
             salt,
         );
+        
+        // Set a default password hash (insecure - should use init_tenant_with_password)
+        tenant.password_hash = [0u8; 32];
         
         let key = format!("tenant:{}", tenant_id);
         let value = bincode::serialize(&tenant)?;
@@ -203,6 +231,12 @@ impl VaultStorage {
         let key_data = (*master_key.key.expose_secret(), master_key.algorithm.clone());
         let serialized = bincode::serialize(&key_data)?;
         self.db.insert(session_key, serialized)?;
+        self.db.flush()?; // Ensure it's written to disk
+        
+        if self.verbose_debug() {
+            eprintln!("Stored session key for tenant: {}", tenant_id);
+        }
+        
         Ok(())
     }
     

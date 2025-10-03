@@ -5,12 +5,7 @@ use crate::{
     error::Result,
 };
 
-#[derive(Debug, Clone)]
-pub enum ConflictType {
-    ModifiedBoth,
-    DeletedLocal,
-    DeletedRemote,
-}
+
 
 pub async fn detect_conflicts(
     local_secrets: &HashMap<String, Secret>,

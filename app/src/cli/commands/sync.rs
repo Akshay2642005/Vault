@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{Select, Input, Confirm};
+use dialoguer::{Select, Input};
 use owo_colors::OwoColorize;
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -42,6 +42,17 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
                     Ok(result) => {
                         pb.finish_with_message(format!("{} Push completed", "✓".green()));
                         println!("Pushed: {} secrets", result.pushed);
+                        
+                        if !result.conflicts.is_empty() {
+                            output::print_warning(&format!("Resolved {} conflicts", result.conflicts.len()));
+                        }
+                        
+                        if !result.errors.is_empty() {
+                            output::print_error(&format!("Encountered {} errors", result.errors.len()));
+                            for error in &result.errors {
+                                println!("  - {}", error);
+                            }
+                        }
                         
                         if let Ok(session) = SessionManager::get_current_session() {
                             let audit_entry = AuditEntry::new(
@@ -109,6 +120,9 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
                                         output::print_info("Conflicts resolved using newer versions");
                                     }
                                     3 => {
+                                        // Use manual resolution strategy
+                                        let _ = ConflictResolver::auto_resolve_conflicts(&[], AutoResolveStrategy::Manual);
+                                        output::print_info("Manual conflict resolution selected");
                                         output::print_info("Operation cancelled");
                                         return Ok(());
                                     }
@@ -133,6 +147,14 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
                         pb.finish_with_message(format!("{} Pull completed", "✓".green()));
                         println!("Pulled: {} secrets", result.pulled);
                         
+                        if !result.conflicts.is_empty() {
+                            output::print_warning(&format!("Resolved {} conflicts", result.conflicts.len()));
+                        }
+                        
+                        if !result.errors.is_empty() {
+                            output::print_error(&format!("Encountered {} errors", result.errors.len()));
+                        }
+                        
                         if let Ok(session) = SessionManager::get_current_session() {
                             let audit_entry = AuditEntry::new(
                                 session.tenant_id,
@@ -156,12 +178,33 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
             println!("{} Sync Status", "📊".cyan());
             
             if let Some(cloud_config) = &config.cloud_sync {
-                println!("Backend: {:?}", cloud_config.backend);
-                println!("Region: {}", cloud_config.region);
-                if let Some(bucket) = &cloud_config.bucket {
-                    println!("Bucket: {}", bucket);
+                let storage = VaultStorage::new(&config.storage_path)?;
+                let sync_manager = SyncManager::from_config(cloud_config, storage)?;
+                
+                match sync_manager.status().await {
+                    Ok(status) => {
+                        println!("Backend: {}", status.backend);
+                        println!("Last sync: {}", status.last_sync.format("%Y-%m-%d %H:%M:%S UTC"));
+                        println!("Local secrets: {}", status.local_secrets);
+                        println!("Remote secrets: {}", status.remote_secrets);
+                        println!("Conflicts: {}", status.conflicts);
+                        let sync_status = if status.sync_needed { "Yes".yellow().to_string() } else { "No".green().to_string() };
+                        println!("Sync needed: {}", sync_status);
+                    }
+                    Err(e) => {
+                        // Handle different error types
+                        let error_msg = e.to_string();
+                        if error_msg.contains("permission") {
+                            output::print_error("Permission denied accessing sync backend");
+                        } else if error_msg.contains("time") || error_msg.contains("chrono") {
+                            output::print_error("Time synchronization error occurred");
+                        } else if error_msg.contains("sync") {
+                            output::print_error("Sync operation failed");
+                        } else {
+                            output::print_error(&format!("Failed to get sync status: {}", e));
+                        }
+                    }
                 }
-                println!("Status: {}", "Ready".green());
             } else {
                 println!("Status: {}", "Not configured".yellow());
             }

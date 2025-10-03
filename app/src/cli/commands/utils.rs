@@ -52,6 +52,11 @@ pub async fn doctor_command(config: &Config, storage: &VaultStorage) -> Result<(
         println!("  {} Storage directory missing", "✗".red());
     }
     
+    // Test basic operations
+    println!("Testing basic operations...");
+    let test_secrets = storage.list("default").await?;
+    println!("  {} Found {} secrets in default namespace", "ℹ".blue(), test_secrets.len());
+    
     println!("{} Diagnostics complete", "✓".green());
     Ok(())
 }

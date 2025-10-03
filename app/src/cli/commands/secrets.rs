@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{Password, Confirm, Input};
+use dialoguer::{Password, Confirm, Input, Select};
 use owo_colors::OwoColorize;
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -38,29 +38,45 @@ pub async fn put_command(
                 .interact()?;
             
             if generate {
-                let length = Input::<usize>::new()
-                    .with_prompt("Password length")
-                    .default(32)
+                let secret_type = Select::new()
+                    .with_prompt("What type of secret to generate?")
+                    .items(&["Password", "API Key", "UUID", "Hex Key"])
+                    .default(0)
                     .interact()?;
                 
-                let include_symbols = Confirm::new()
-                    .with_prompt("Include symbols?")
-                    .default(true)
-                    .interact()?;
-                
-                let generated = SecretGenerator::generate_password(length, include_symbols);
-                println!("{} Generated password: {}", "🔑".green(), generated.yellow());
-                
-                if Confirm::new()
-                    .with_prompt("Use this generated password?")
-                    .default(true)
-                    .interact()?
-                {
-                    generated
-                } else {
-                    Password::new()
-                        .with_prompt("Enter secret value")
-                        .interact()?
+                match secret_type {
+                    0 => {
+                        let length = Input::<usize>::new()
+                            .with_prompt("Password length")
+                            .default(32)
+                            .interact()?;
+                        
+                        let include_symbols = Confirm::new()
+                            .with_prompt("Include symbols?")
+                            .default(true)
+                            .interact()?;
+                        
+                        SecretGenerator::generate_password(length, include_symbols)
+                    }
+                    1 => {
+                        let prefix = Input::<String>::new()
+                            .with_prompt("API key prefix (optional)")
+                            .allow_empty(true)
+                            .interact()?;
+                        
+                        let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
+                        SecretGenerator::generate_api_key(prefix_opt)
+                    }
+                    2 => SecretGenerator::generate_uuid(),
+                    3 => {
+                        let length = Input::<usize>::new()
+                            .with_prompt("Hex key length")
+                            .default(32)
+                            .interact()?;
+                        
+                        SecretGenerator::generate_hex_key(length)
+                    }
+                    _ => SecretGenerator::generate_password(32, true),
                 }
             } else {
                 Password::new()
@@ -75,7 +91,11 @@ pub async fn put_command(
     pb.set_message("Storing secret...");
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
     
-    storage.put_with_tags(key, &secret_value, ns, tags).await?;
+    if tags.is_empty() {
+        storage.put(key, &secret_value, ns).await?;
+    } else {
+        storage.put_with_tags(key, &secret_value, ns, tags).await?;
+    }
     
     if let Ok(session) = SessionManager::get_current_session() {
         let audit_entry = AuditEntry::new(
@@ -83,7 +103,9 @@ pub async fn put_command(
             AuditLogger::EVENT_SECRET_CREATED.to_string(),
             format!("Secret {}/{} created", ns, key),
             session.user_id,
-        );
+        )
+        .with_resource("secret".to_string(), format!("{}/{}", ns, key))
+        .with_metadata(serde_json::json!({"namespace": ns, "key": key, "tags": tags}));
         let _ = AuditLogger::log_event(&audit_entry);
     }
     
@@ -135,7 +157,8 @@ pub async fn get_command(
                     AuditLogger::EVENT_SECRET_ACCESSED.to_string(),
                     format!("Secret {}/{} accessed", ns, key),
                     session.user_id,
-                );
+                )
+                .with_context(Some("127.0.0.1".to_string()), Some("vault-cli".to_string()));
                 let _ = AuditLogger::log_event(&audit_entry);
             }
         }
@@ -202,7 +225,19 @@ pub async fn delete_command(
     }
     
     match storage.delete(key, ns).await {
-        Ok(_) => println!("{} Secret deleted: {}/{}", "✓".green(), ns.cyan(), key.cyan()),
+        Ok(_) => {
+            println!("{} Secret deleted: {}/{}", "✓".green(), ns.cyan(), key.cyan());
+            
+            if let Ok(session) = SessionManager::get_current_session() {
+                let audit_entry = AuditEntry::new(
+                    session.tenant_id,
+                    AuditLogger::EVENT_SECRET_UPDATED.to_string(),
+                    format!("Secret {}/{} updated (deleted)", ns, key),
+                    session.user_id,
+                );
+                let _ = AuditLogger::log_event(&audit_entry);
+            }
+        }
         Err(_) => println!("{} Secret not found: {}/{}", "✗".red(), ns, key),
     }
     

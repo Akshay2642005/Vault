@@ -1,10 +1,9 @@
 use anyhow::Result;
-use dialoguer::{Confirm, Select};
+use dialoguer::Confirm;
 use owo_colors::OwoColorize;
-use std::collections::HashMap;
 
 use crate::{
-    storage::{VaultStorage, AuditLogger, AuditEntry},
+    storage::{AuditLogger, AuditEntry},
     cli::{RoleAction, AuditAction, output},
     auth::{SessionManager, Role},
 };
@@ -41,9 +40,18 @@ pub async fn roles_command(action: RoleAction) -> Result<()> {
                     tenant.clone(),
                     AuditLogger::EVENT_USER_ADDED.to_string(),
                     format!("User {} added with role {}", user, role),
-                    session.user_id,
+                    session.user_id.clone(),
                 );
                 let _ = AuditLogger::log_event(&audit_entry);
+                
+                // Also log role change
+                let role_entry = AuditEntry::new(
+                    tenant.clone(),
+                    AuditLogger::EVENT_ROLE_CHANGED.to_string(),
+                    format!("User {} assigned role {}", user, role),
+                    session.user_id,
+                );
+                let _ = AuditLogger::log_event(&role_entry);
             }
             
             output::print_success(&format!("User {} added to tenant {} with role {}", user, tenant, role));
@@ -56,11 +64,11 @@ pub async fn roles_command(action: RoleAction) -> Result<()> {
                 println!("{} Removing user {} from tenant {}", "➖".red(), user.cyan(), tenant.cyan());
                 
                 if let Ok(session) = SessionManager::get_current_session() {
-                    let audit_entry = AuditEntry::new(
-                        tenant.clone(),
-                        AuditLogger::EVENT_USER_REMOVED.to_string(),
-                        format!("User {} removed from tenant", user),
-                        session.user_id,
+                    let audit_entry = AuditLogger::create_entry(
+                        &tenant,
+                        AuditLogger::EVENT_USER_REMOVED,
+                        &format!("User {} removed from tenant", user),
+                        &session.user_id,
                     );
                     let _ = AuditLogger::log_event(&audit_entry);
                 }
