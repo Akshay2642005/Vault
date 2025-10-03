@@ -1,6 +1,6 @@
 [package]
 name = "rvault"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2021"
 authors = ["Akshay B <akshay2642005@gmail.com>"]
 description = "A local-first, multi-tenant password manager with cloud sync capabilities"

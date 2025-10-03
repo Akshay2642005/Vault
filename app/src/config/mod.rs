@@ -24,6 +24,7 @@ pub struct CloudConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "PascalCase")]
 pub enum CloudMode {
     None,
     Backup,

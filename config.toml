@@ -1,0 +1,57 @@
+# Vault Configuration File
+# Copy this to ~/.config/vault/config.toml and customize
+
+# Local storage path (where encrypted secrets are stored)
+storage_path = "~/.vault/vault.db"
+
+# Default tenant ID (optional)
+tenant_id = "personal"
+
+# Cloud configuration
+# Mode options: "None", "Backup", "Collaborative"
+# - None: No cloud features, fully local
+# - Backup: Cloud backup only, no multi-user features
+# - Collaborative: Full cloud sync with multi-user support and roles
+[cloud]
+mode = "None"
+
+# Backend configuration (only used if mode is "Backup" or "Collaborative")
+# backend = "S3"  # "S3" or "Postgres"
+# region = "us-east-1"
+# bucket = "my-vault-secrets"
+# database_url = "postgresql://vault:password@localhost/vault_sync"
+
+# Sync settings
+# sync_interval_minutes = 30
+# envelope_encryption = false
+
+# Security configuration
+[security]
+# Encryption algorithm: "aes256gcm" or "chacha20poly1305"
+encryption_algorithm = "aes256gcm"
+
+# Argon2id key derivation parameters
+# Higher values = more secure but slower
+key_derivation_memory_cost = 65536 # 64 MB
+key_derivation_time_cost = 3
+key_derivation_parallelism = 1
+
+# Session timeout in hours
+session_timeout_hours = 24
+
+# Require two-factor authentication (not yet implemented)
+require_2fa = false
+
+# UI configuration
+[ui]
+# Enable colored output
+color_output = true
+
+# Show progress bars
+progress_bars = true
+
+# Table format: "modern", "simple", "grid"
+table_format = "modern"
+
+# Date format for display
+date_format = "%Y-%m-%d %H:%M:%S UTC"
