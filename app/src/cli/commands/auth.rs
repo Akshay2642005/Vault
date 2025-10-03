@@ -66,7 +66,9 @@ pub async fn init_command(
 
 pub async fn login_command(
     storage: &mut VaultStorage,
+    config: &crate::config::Config,
     tenant: &str,
+    email: Option<&str>,
     remember: bool,
 ) -> Result<()> {
     if !storage.tenant_exists(tenant)? {
@@ -74,9 +76,30 @@ pub async fn login_command(
         return Ok(());
     }
     
-    let passphrase = Password::new()
-        .with_prompt("Enter master passphrase")
-        .interact()?;
+    // Check cloud mode
+    let is_collaborative = config.cloud.as_ref()
+        .map(|c| matches!(c.mode, crate::config::CloudMode::Collaborative))
+        .unwrap_or(false);
+    
+    let (user_email, passphrase) = if is_collaborative {
+        let email = match email {
+            Some(e) => e.to_string(),
+            None => dialoguer::Input::<String>::new()
+                .with_prompt("Email")
+                .interact()?,
+        };
+        
+        let pwd = Password::new()
+            .with_prompt(&format!("Password for {}", email))
+            .interact()?;
+            
+        (email, pwd)
+    } else {
+        let pwd = Password::new()
+            .with_prompt("Enter master passphrase")
+            .interact()?;
+        ("admin".to_string(), pwd)
+    };
     
     let pb = ProgressBar::new_spinner();
     pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
@@ -88,10 +111,24 @@ pub async fn login_command(
             pb.finish_with_message(format!("{} Logged in to tenant: {}", "✓".green(), tenant.cyan()));
             
             let duration_hours = if remember { 168 } else { 24 };
+            let (user_id, role) = if is_collaborative {
+                // In collaborative mode, get user role from storage
+                match storage.get_user_role(tenant, &user_email).await {
+                    Ok(Some(user_role)) => (user_email.clone(), user_role),
+                    Ok(None) => {
+                        output::print_error(&format!("User {} not found in tenant {}", user_email, tenant));
+                        return Ok(());
+                    }
+                    Err(_) => (user_email.clone(), Role::Reader), // Default role
+                }
+            } else {
+                ("admin".to_string(), Role::Admin)
+            };
+            
             let session = Session::new(
                 tenant.to_string(),
-                "admin".to_string(),
-                Role::Admin,
+                user_id,
+                role,
                 duration_hours,
             );
             

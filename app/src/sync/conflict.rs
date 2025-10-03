@@ -43,6 +43,7 @@ pub enum ConflictResolution {
 pub struct ConflictResolver;
 
 impl ConflictResolver {
+    #[allow(dead_code)]
     pub fn resolve_conflict(
         local_secret: &Secret,
         remote_secret: &Secret,

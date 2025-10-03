@@ -57,25 +57,33 @@ impl SyncManager {
     }
     
     pub fn from_config(config: &CloudConfig, storage: VaultStorage) -> Result<Self> {
-        if !config.enabled {
-            return Err(VaultError::Config("Cloud sync is disabled".to_string()));
+        match config.mode {
+            crate::config::CloudMode::None => {
+                return Err(VaultError::Config("Cloud sync is disabled".to_string()));
+            }
+            _ => {}
         }
         
         let backend = match &config.backend {
-            crate::config::CloudBackend::S3 => {
+            Some(crate::config::CloudBackend::S3) => {
                 let bucket = config.bucket.as_ref()
                     .ok_or_else(|| VaultError::Config("S3 bucket not configured".to_string()))?;
+                let region = config.region.as_ref()
+                    .ok_or_else(|| VaultError::Config("S3 region not configured".to_string()))?;
                 SyncBackend::S3 {
                     bucket: bucket.clone(),
-                    region: config.region.clone(),
+                    region: region.clone(),
                 }
             }
-            crate::config::CloudBackend::Postgres => {
+            Some(crate::config::CloudBackend::Postgres) => {
                 let url = config.database_url.as_ref()
                     .ok_or_else(|| VaultError::Config("Database URL not configured".to_string()))?;
                 SyncBackend::Postgres {
                     url: url.clone(),
                 }
+            }
+            None => {
+                return Err(VaultError::Config("No sync backend configured".to_string()));
             }
         };
         

@@ -39,6 +39,8 @@ pub enum Commands {
     Login {
         #[arg(long, help = "Tenant identifier")]
         tenant: String,
+        #[arg(long, help = "User email (for collaborative mode)")]
+        email: Option<String>,
         #[arg(long, help = "Remember session for longer")]
         remember: bool,
     },
@@ -113,6 +115,12 @@ pub enum Commands {
     Roles {
         #[command(subcommand)]
         action: RoleAction,
+    },
+    
+    /// Manage users (collaborative mode only)
+    Users {
+        #[command(subcommand)]
+        action: UserAction,
     },
     
     /// Audit operations
@@ -222,6 +230,36 @@ pub enum AuditAction {
     },
 }
 
+#[derive(Subcommand)]
+pub enum UserAction {
+    /// Invite user to tenant
+    Invite {
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        role: String,
+    },
+    /// List users in current tenant
+    List,
+    /// Remove user from tenant
+    Remove {
+        #[arg(long)]
+        email: String,
+    },
+    /// Change user role
+    ChangeRole {
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        role: String,
+    },
+    /// Accept invitation
+    Accept {
+        #[arg(long)]
+        token: String,
+    },
+}
+
 impl VaultCli {
     pub async fn run(self) -> Result<()> {
         let config = Config::load(self.config.as_deref())?;
@@ -231,8 +269,8 @@ impl VaultCli {
             Commands::Init { tenant, admin, force } => {
                 init_command(&mut storage, &tenant, &admin, force).await
             }
-            Commands::Login { tenant, remember } => {
-                login_command(&mut storage, &tenant, remember).await
+            Commands::Login { tenant, email, remember } => {
+                login_command(&mut storage, &config, &tenant, email.as_deref(), remember).await
             }
             Commands::Logout => {
                 logout_command().await
@@ -269,6 +307,9 @@ impl VaultCli {
             }
             Commands::Audit { action } => {
                 audit_command(action).await
+            }
+            Commands::Users { action } => {
+                users_command(action, &storage, &config).await
             }
             Commands::Export { output, format, namespace } => {
                 export_command(&storage, &output, &format, namespace.as_deref()).await

@@ -76,6 +76,7 @@ impl AuditLogger {
     pub const EVENT_SECRET_CREATED: &'static str = "secret_created";
     pub const EVENT_SECRET_ACCESSED: &'static str = "secret_accessed";
     pub const EVENT_SECRET_UPDATED: &'static str = "secret_updated";
+    #[allow(dead_code)]
     pub const EVENT_SECRET_DELETED: &'static str = "secret_deleted";
     pub const EVENT_TENANT_CREATED: &'static str = "tenant_created";
     pub const EVENT_USER_ADDED: &'static str = "user_added";

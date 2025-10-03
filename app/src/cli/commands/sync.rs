@@ -24,10 +24,15 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
     
     match action {
         SyncAction::Push { force } => {
-            if let Some(cloud_config) = &config.cloud_sync {
-                if !cloud_config.enabled {
-                    output::print_warning("Cloud sync is disabled in configuration.");
-                    return Ok(());
+            if let Some(cloud_config) = &config.cloud {
+                match cloud_config.mode {
+                    crate::config::CloudMode::None => {
+                        output::print_warning("Cloud features are disabled. Set cloud.mode to 'backup' or 'collaborative' to enable sync.");
+                        return Ok(());
+                    }
+                    crate::config::CloudMode::Backup | crate::config::CloudMode::Collaborative => {
+                        // Continue with sync operation
+                    }
                 }
                 
                 let storage = VaultStorage::new(&config.storage_path)?;
@@ -74,10 +79,15 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
             }
         }
         SyncAction::Pull { force } => {
-            if let Some(cloud_config) = &config.cloud_sync {
-                if !cloud_config.enabled {
-                    output::print_warning("Cloud sync is disabled in configuration.");
-                    return Ok(());
+            if let Some(cloud_config) = &config.cloud {
+                match cloud_config.mode {
+                    crate::config::CloudMode::None => {
+                        output::print_warning("Cloud features are disabled. Set cloud.mode to 'backup' or 'collaborative' to enable sync.");
+                        return Ok(());
+                    }
+                    crate::config::CloudMode::Backup | crate::config::CloudMode::Collaborative => {
+                        // Continue with sync operation
+                    }
                 }
                 
                 let storage = VaultStorage::new(&config.storage_path)?;
@@ -177,7 +187,20 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
         SyncAction::Status => {
             println!("{} Sync Status", "📊".cyan());
             
-            if let Some(cloud_config) = &config.cloud_sync {
+            if let Some(cloud_config) = &config.cloud {
+                match cloud_config.mode {
+                    crate::config::CloudMode::None => {
+                        println!("Cloud mode: {}", "None (fully local)".yellow());
+                        println!("Status: {}", "Offline only".green());
+                        return Ok(());
+                    }
+                    crate::config::CloudMode::Backup => {
+                        println!("Cloud mode: {}", "Backup".blue());
+                    }
+                    crate::config::CloudMode::Collaborative => {
+                        println!("Cloud mode: {}", "Collaborative".purple());
+                    }
+                }
                 let storage = VaultStorage::new(&config.storage_path)?;
                 let sync_manager = SyncManager::from_config(cloud_config, storage)?;
                 
@@ -212,9 +235,40 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
         SyncAction::Configure => {
             println!("{} Sync Configuration Wizard", "🔧".cyan());
             
+            let cloud_mode = Select::new()
+                .with_prompt("Select cloud mode")
+                .items(&[
+                    "None - Fully local, no cloud features",
+                    "Backup - Cloud backup only, single user", 
+                    "Collaborative - Full cloud sync with multi-user support"
+                ])
+                .default(1)
+                .interact()?;
+            
+            let config_path = dirs::config_dir()
+                .unwrap_or_default()
+                .join("vault")
+                .join("config.toml");
+            
+            if cloud_mode == 0 {
+                let config_content = r#"storage_path = "~/.vault/vault.db"
+
+[cloud]
+mode = "none"
+"#;
+                
+                if let Some(parent) = config_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&config_path, config_content)?;
+                
+                output::print_success("Cloud features disabled - vault will work fully offline");
+                return Ok(());
+            }
+            
             let backend = Select::new()
                 .with_prompt("Select sync backend")
-                .items(&["Amazon S3", "PostgreSQL Database", "Disable sync"])
+                .items(&["Amazon S3", "PostgreSQL Database"])
                 .default(0)
                 .interact()?;
             
@@ -233,16 +287,23 @@ pub async fn sync_command(action: SyncAction, config: &Config) -> Result<()> {
                         .default("us-east-1".to_string())
                         .interact()?;
                     
+                    let mode_str = match cloud_mode {
+                        1 => "backup",
+                        2 => "collaborative",
+                        _ => "none",
+                    };
+                    
                     let config_content = format!(
                         r#"storage_path = "~/.vault/vault.db"
 
-[cloud_sync]
-enabled = true
+[cloud]
+mode = "{}"
 backend = "S3"
 region = "{}"
 bucket = "{}"
+sync_interval_minutes = 30
 "#,
-                        region, bucket
+                        mode_str, region, bucket
                     );
                     
                     if let Some(parent) = config_path.parent() {
@@ -257,15 +318,22 @@ bucket = "{}"
                         .with_prompt("PostgreSQL connection URL")
                         .interact()?;
                     
+                    let mode_str = match cloud_mode {
+                        1 => "backup",
+                        2 => "collaborative",
+                        _ => "none",
+                    };
+                    
                     let config_content = format!(
                         r#"storage_path = "~/.vault/vault.db"
 
-[cloud_sync]
-enabled = true
+[cloud]
+mode = "{}"
 backend = "Postgres"
 database_url = "{}"
+sync_interval_minutes = 30
 "#,
-                        url
+                        mode_str, url
                     );
                     
                     if let Some(parent) = config_path.parent() {
@@ -275,20 +343,7 @@ database_url = "{}"
                     
                     output::print_success("PostgreSQL sync configured");
                 }
-                2 => {
-                    let config_content = r#"storage_path = "~/.vault/vault.db"
 
-[cloud_sync]
-enabled = false
-"#;
-                    
-                    if let Some(parent) = config_path.parent() {
-                        std::fs::create_dir_all(parent)?;
-                    }
-                    std::fs::write(&config_path, config_content)?;
-                    
-                    output::print_success("Cloud sync disabled");
-                }
                 _ => {}
             }
         }

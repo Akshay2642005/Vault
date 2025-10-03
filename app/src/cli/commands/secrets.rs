@@ -32,20 +32,28 @@ pub async fn put_command(
     let secret_value = match value {
         Some(v) => v.to_string(),
         None => {
-            let generate = Confirm::new()
-                .with_prompt("Generate a secure password?")
-                .default(false)
+            let secret_type_choice = Select::new()
+                .with_prompt("What type of secret?")
+                .items(&[
+                    "Simple Password",
+                    "API Key", 
+                    "Database Credentials",
+                    "SSH Key Pair",
+                    "Custom Text",
+                    "UUID",
+                    "Hex Key"
+                ])
+                .default(0)
                 .interact()?;
             
-            if generate {
-                let secret_type = Select::new()
-                    .with_prompt("What type of secret to generate?")
-                    .items(&["Password", "API Key", "UUID", "Hex Key"])
-                    .default(0)
-                    .interact()?;
-                
-                match secret_type {
-                    0 => {
+            match secret_type_choice {
+                0 => {
+                    let generate = Confirm::new()
+                        .with_prompt("Generate secure password?")
+                        .default(true)
+                        .interact()?;
+                    
+                    if generate {
                         let length = Input::<usize>::new()
                             .with_prompt("Password length")
                             .default(32)
@@ -57,33 +65,71 @@ pub async fn put_command(
                             .interact()?;
                         
                         SecretGenerator::generate_password(length, include_symbols)
+                    } else {
+                        Password::new()
+                            .with_prompt("Enter password")
+                            .interact()?
                     }
-                    1 => {
-                        let prefix = Input::<String>::new()
-                            .with_prompt("API key prefix (optional)")
-                            .allow_empty(true)
-                            .interact()?;
-                        
-                        let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
-                        SecretGenerator::generate_api_key(prefix_opt)
-                    }
-                    2 => SecretGenerator::generate_uuid(),
-                    3 => {
-                        let length = Input::<usize>::new()
-                            .with_prompt("Hex key length")
-                            .default(32)
-                            .interact()?;
-                        
-                        SecretGenerator::generate_hex_key(length)
-                    }
-                    _ => SecretGenerator::generate_password(32, true),
                 }
-            } else {
-                Password::new()
-                    .with_prompt("Enter secret value")
-                    .interact()?
+                1 => {
+                    let prefix = Input::<String>::new()
+                        .with_prompt("API key prefix (optional)")
+                        .allow_empty(true)
+                        .interact()?;
+                    
+                    let prefix_opt = if prefix.is_empty() { None } else { Some(prefix.as_str()) };
+                    SecretGenerator::generate_api_key(prefix_opt)
+                }
+                2 => {
+                    let db_type = Select::new()
+                        .with_prompt("Database type")
+                        .items(&["postgres", "mysql", "redis", "mongodb"])
+                        .default(0)
+                        .interact()?;
+                    
+                    let db_name = ["postgres", "mysql", "redis", "mongodb"][db_type];
+                    let creds = SecretGenerator::generate_database_credentials(db_name);
+                    serde_json::to_string_pretty(&creds).unwrap_or_default()
+                }
+                3 => {
+                    let (private_key, public_key) = SecretGenerator::generate_ssh_key();
+                    format!("Private Key:\n{}\n\nPublic Key:\n{}", private_key, public_key)
+                }
+                4 => {
+                    Input::<String>::new()
+                        .with_prompt("Enter custom text")
+                        .interact()?
+                }
+                5 => SecretGenerator::generate_uuid(),
+                6 => {
+                    let length = Input::<usize>::new()
+                        .with_prompt("Hex key length")
+                        .default(32)
+                        .interact()?;
+                    
+                    SecretGenerator::generate_hex_key(length)
+                }
+                _ => {
+                    Password::new()
+                        .with_prompt("Enter secret value")
+                        .interact()?
+                }
             }
         }
+    };
+    
+    let password_protected = Confirm::new()
+        .with_prompt("Password protect this secret?")
+        .default(false)
+        .interact()?;
+    
+    let access_password = if password_protected {
+        Some(Password::new()
+            .with_prompt("Enter access password for this secret")
+            .with_confirmation("Confirm access password", "Passwords do not match")
+            .interact()?)
+    } else {
+        None
     };
     
     let pb = ProgressBar::new_spinner();
@@ -92,9 +138,9 @@ pub async fn put_command(
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
     
     if tags.is_empty() {
-        storage.put(key, &secret_value, ns).await?;
+        storage.put_with_protection(key, &secret_value, ns, &[], access_password.as_deref()).await?;
     } else {
-        storage.put_with_tags(key, &secret_value, ns, tags).await?;
+        storage.put_with_protection(key, &secret_value, ns, tags, access_password.as_deref()).await?;
     }
     
     if let Ok(session) = SessionManager::get_current_session() {
@@ -123,7 +169,17 @@ pub async fn get_command(
 ) -> Result<()> {
     let ns = namespace.unwrap_or("default");
     
-    match storage.get_with_metadata(key, ns).await? {
+    // Check if secret is password protected
+    let is_protected = storage.is_secret_password_protected(key, ns).await?;
+    let access_password = if is_protected {
+        Some(Password::new()
+            .with_prompt("Enter access password for this secret")
+            .interact()?)
+    } else {
+        None
+    };
+    
+    match storage.get_with_metadata_and_password(key, ns, access_password.as_deref()).await? {
         Some((value, meta)) => {
             if copy {
                 #[cfg(target_os = "windows")]

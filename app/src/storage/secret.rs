@@ -50,6 +50,19 @@ pub struct SecretField {
     pub validation_regex: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum SecretType {
+    Password,
+    ApiKey,
+    DatabaseCredentials,
+    SshKey,
+    Certificate,
+    Note,
+    CreditCard,
+    BankAccount,
+    Custom,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SecretFieldType {
     Text,
@@ -59,6 +72,14 @@ pub enum SecretFieldType {
     Number,
     Date,
     Json,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SecretEntry {
+    pub secret_type: SecretType,
+    pub fields: std::collections::HashMap<String, String>,
+    pub password_protected: bool,
+    pub access_password_hash: Option<[u8; 32]>,
 }
 
 pub struct SecretGenerator;
@@ -108,5 +129,28 @@ impl SecretGenerator {
         let mut bytes = vec![0u8; length / 2];
         rand::thread_rng().fill_bytes(&mut bytes);
         hex::encode(bytes)
+    }
+    
+    pub fn generate_ssh_key() -> (String, String) {
+        // Generate a simple SSH key pair placeholder
+        let private_key = format!("-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----", 
+            Self::generate_password(64, false));
+        let public_key = format!("ssh-rsa {} vault@generated", Self::generate_password(64, false));
+        (private_key, public_key)
+    }
+    
+    pub fn generate_database_credentials(db_type: &str) -> std::collections::HashMap<String, String> {
+        let mut creds = std::collections::HashMap::new();
+        creds.insert("username".to_string(), format!("user_{}", Self::generate_password(8, false)));
+        creds.insert("password".to_string(), Self::generate_password(32, true));
+        creds.insert("database".to_string(), format!("{}_db", db_type));
+        creds.insert("host".to_string(), "localhost".to_string());
+        creds.insert("port".to_string(), match db_type {
+            "postgres" => "5432".to_string(),
+            "mysql" => "3306".to_string(),
+            "redis" => "6379".to_string(),
+            _ => "5432".to_string(),
+        });
+        creds
     }
 }

@@ -18,19 +18,56 @@ pub async fn status_command(config: &Config, storage: &VaultStorage) -> Result<(
         println!("Tenant: {}", tenant.cyan());
     }
     
+    // Cloud configuration
+    if let Some(cloud_config) = &config.cloud {
+        match cloud_config.mode {
+            crate::config::CloudMode::None => {
+                println!("Cloud mode: {}", "None (fully local)".yellow());
+            }
+            crate::config::CloudMode::Backup => {
+                println!("Cloud mode: {}", "Backup".blue());
+                if let Some(backend) = &cloud_config.backend {
+                    println!("Backend: {:?}", backend);
+                }
+            }
+            crate::config::CloudMode::Collaborative => {
+                println!("Cloud mode: {}", "Collaborative".purple());
+                if let Some(backend) = &cloud_config.backend {
+                    println!("Backend: {:?}", backend);
+                }
+            }
+        }
+    } else {
+        println!("Cloud mode: {}", "Not configured".yellow());
+    }
+    
     let stats = storage.get_stats().await?;
     println!("Secrets: {}", stats.secret_count);
     println!("Namespaces: {}", stats.namespace_count);
+    println!("Tenants: {}", stats.tenant_count);
     
-    let session_path = dirs::config_dir()
-        .unwrap_or_default()
-        .join("vault")
-        .join("session");
-    
-    if session_path.exists() {
-        println!("Status: {}", "Logged in".green());
-    } else {
-        println!("Status: {}", "Logged out".yellow());
+    // Session information
+    match SessionManager::get_current_session() {
+        Ok(session) => {
+            println!("Status: {}", "Logged in".green());
+            println!("User: {}", session.user_id.cyan());
+            println!("Role: {:?}", session.role);
+            
+            let time_left = session.time_until_expiry();
+            let hours = time_left.num_hours();
+            let minutes = time_left.num_minutes() % 60;
+            
+            if hours > 0 {
+                println!("Session expires in: {}h {}m", hours, minutes);
+            } else if minutes > 0 {
+                println!("Session expires in: {}m", minutes);
+            } else {
+                println!("Session: {}", "Expired".red());
+            }
+        }
+        Err(_) => {
+            println!("Status: {}", "Logged out".yellow());
+        }
     }
     
     Ok(())

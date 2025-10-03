@@ -12,6 +12,7 @@ pub enum VaultError {
     Json(#[from] serde_json::Error),
     
     #[error("Chrono error: {0}")]
+    #[allow(dead_code)]
     Chrono(String),
     
     #[error("IO error: {0}")]
@@ -30,6 +31,7 @@ pub enum VaultError {
     Config(String),
     
     #[error("Sync error: {0}")]
+    #[allow(dead_code)]
     Sync(String),
     
     #[error("Tenant not found: {0}")]
@@ -45,6 +47,7 @@ pub enum VaultError {
     InvalidPassphrase,
     
     #[error("Permission denied: {0}")]
+    #[allow(dead_code)]
     PermissionDenied(String),
 }
 

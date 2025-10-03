@@ -7,20 +7,27 @@ use crate::error::{VaultError, Result};
 pub struct Config {
     pub storage_path: String,
     pub tenant_id: Option<String>,
-    pub cloud_sync: Option<CloudConfig>,
+    pub cloud: Option<CloudConfig>,
     pub security: SecurityConfig,
     pub ui: UiConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloudConfig {
-    pub enabled: bool,
-    pub backend: CloudBackend,
-    pub region: String,
+    pub mode: CloudMode,
+    pub backend: Option<CloudBackend>,
+    pub region: Option<String>,
     pub bucket: Option<String>,
     pub database_url: Option<String>,
     pub envelope_encryption: Option<bool>,
     pub sync_interval_minutes: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum CloudMode {
+    None,
+    Backup,
+    Collaborative,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -57,7 +64,7 @@ impl Default for Config {
                 .to_string_lossy()
                 .to_string(),
             tenant_id: None,
-            cloud_sync: None,
+            cloud: None,
             security: SecurityConfig::default(),
             ui: UiConfig::default(),
         }

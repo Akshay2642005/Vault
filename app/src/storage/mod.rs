@@ -9,15 +9,17 @@ use crate::{
     error::{VaultError, Result},
 };
 
+
+
 mod tenant;
 mod secret;
-mod session;
 mod audit;
+mod user;
 
 pub use tenant::*;
 pub use secret::SecretGenerator;
-
 pub use audit::*;
+pub use user::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SecretMetadata {
@@ -246,17 +248,28 @@ impl VaultStorage {
         Ok(())
     }
     
+    #[allow(dead_code)]
     pub async fn put(&self, key: &str, value: &str, namespace: &str) -> Result<()> {
         self.put_with_tags(key, value, namespace, &[]).await
     }
     
-    pub async fn put_with_tags(&self, key: &str, value: &str, namespace: &str, tags: &[String]) -> Result<()> {
+    pub async fn put_with_protection(&self, key: &str, value: &str, namespace: &str, tags: &[String], access_password: Option<&str>) -> Result<()> {
         let master_key = self.master_key.as_ref()
             .ok_or(VaultError::VaultLocked)?;
         
         let tenant_id = self.current_tenant.as_ref()
             .ok_or(VaultError::VaultLocked)?;
-            
+        
+        // Hash access password if provided
+        let access_password_hash: Option<[u8; 32]> = if let Some(pwd) = access_password {
+            use sha2::{Sha256, Digest};
+            let mut hasher = Sha256::new();
+            hasher.update(pwd.as_bytes());
+            Some(hasher.finalize().into())
+        } else {
+            None
+        };
+        
         let encrypted_value = master_key.encrypt(value.as_bytes())
             .map_err(|e| VaultError::Crypto(e.to_string()))?;
         
@@ -265,10 +278,10 @@ impl VaultStorage {
             tenant_id: tenant_id.clone(),
             namespace: namespace.to_string(),
             key: key.to_string(),
-            version: 1, // TODO: Implement versioning
+            version: 1,
             created_at: Utc::now(),
             updated_at: Utc::now(),
-            created_by: "user".to_string(), // TODO: Get from session
+            created_by: "user".to_string(),
             tags: tags.to_vec(),
         };
         
@@ -280,12 +293,22 @@ impl VaultStorage {
         let storage_key = format!("secret:{}:{}:{}", tenant_id, namespace, key);
         let storage_value = bincode::serialize(&secret)?;
         self.db.insert(storage_key, storage_value)?;
+        
+        // Store access password hash separately if provided
+        if let Some(hash) = access_password_hash {
+            let pwd_key = format!("secret_pwd:{}:{}:{}", tenant_id, namespace, key);
+            self.db.insert(pwd_key, hash.as_slice())?;
+        }
+        
         self.db.flush()?;
         
-        // Log audit event
         self.log_audit_event(tenant_id, "secret_created", &format!("Secret {}/{} created", namespace, key)).await?;
         
         Ok(())
+    }
+    
+    pub async fn put_with_tags(&self, key: &str, value: &str, namespace: &str, tags: &[String]) -> Result<()> {
+        self.put_with_protection(key, value, namespace, tags, None).await
     }
     
     pub async fn get(&self, key: &str, namespace: &str) -> Result<Option<String>> {
@@ -295,13 +318,41 @@ impl VaultStorage {
         }
     }
     
-    pub async fn get_with_metadata(&self, key: &str, namespace: &str) -> Result<Option<(String, SecretMetadata)>> {
+    pub async fn is_secret_password_protected(&self, key: &str, namespace: &str) -> Result<bool> {
+        let tenant_id = self.current_tenant.as_ref()
+            .ok_or(VaultError::VaultLocked)?;
+        
+        let pwd_key = format!("secret_pwd:{}:{}:{}", tenant_id, namespace, key);
+        Ok(self.db.contains_key(&pwd_key)?)
+    }
+    
+    pub async fn get_with_metadata_and_password(&self, key: &str, namespace: &str, access_password: Option<&str>) -> Result<Option<(String, SecretMetadata)>> {
         let master_key = self.master_key.as_ref()
             .ok_or(VaultError::VaultLocked)?;
         
         let tenant_id = self.current_tenant.as_ref()
             .ok_or(VaultError::VaultLocked)?;
-            
+        
+        // Check if password protected and validate password
+        let pwd_key = format!("secret_pwd:{}:{}:{}", tenant_id, namespace, key);
+        if let Some(stored_hash) = self.db.get(&pwd_key)? {
+            match access_password {
+                Some(pwd) => {
+                    use sha2::{Sha256, Digest};
+                    let mut hasher = Sha256::new();
+                    hasher.update(pwd.as_bytes());
+                    let provided_hash: [u8; 32] = hasher.finalize().into();
+                    
+                    if stored_hash.as_ref() != provided_hash {
+                        return Err(VaultError::Auth("Invalid access password".to_string()));
+                    }
+                }
+                None => {
+                    return Err(VaultError::Auth("Secret is password protected".to_string()));
+                }
+            }
+        }
+        
         let storage_key = format!("secret:{}:{}:{}", tenant_id, namespace, key);
         
         if let Some(data) = self.db.get(&storage_key)? {
@@ -311,13 +362,16 @@ impl VaultStorage {
             let value = String::from_utf8(decrypted)
                 .map_err(|e| VaultError::Crypto(e.to_string()))?;
             
-            // Log audit event
             self.log_audit_event(tenant_id, "secret_accessed", &format!("Secret {}/{} accessed", namespace, key)).await?;
             
             Ok(Some((value, secret.metadata)))
         } else {
             Ok(None)
         }
+    }
+    
+    pub async fn get_with_metadata(&self, key: &str, namespace: &str) -> Result<Option<(String, SecretMetadata)>> {
+        self.get_with_metadata_and_password(key, namespace, None).await
     }
     
     pub async fn list(&self, namespace: &str) -> Result<Vec<String>> {
@@ -504,5 +558,80 @@ impl VaultStorage {
         self.db.insert(key, value)?;
         
         Ok(())
+    }
+    
+    pub async fn get_user_role(&self, tenant_id: &str, email: &str) -> Result<Option<crate::auth::Role>> {
+        let user_key = format!("user:{}:{}", tenant_id, email);
+        if let Some(data) = self.db.get(&user_key)? {
+            let user: User = bincode::deserialize(&data)?;
+            if user.is_active {
+                Ok(Some(user.role))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+    
+    #[allow(dead_code)]
+    pub async fn add_user(&self, tenant_id: &str, email: &str, role: crate::auth::Role, password_hash: Option<[u8; 32]>) -> Result<()> {
+        let mut user = User::new(email.to_string(), tenant_id.to_string(), role.clone());
+        if let Some(hash) = password_hash {
+            user = user.with_password(hash);
+        }
+        
+        let user_key = format!("user:{}:{}", tenant_id, email);
+        let user_data = bincode::serialize(&user)?;
+        self.db.insert(user_key, user_data)?;
+        self.db.flush()?;
+        
+        self.log_audit_event(tenant_id, "user_added", &format!("User {} added with role {:?}", email, role)).await?;
+        
+        Ok(())
+    }
+    
+    pub async fn remove_user(&self, tenant_id: &str, email: &str) -> Result<()> {
+        let user_key = format!("user:{}:{}", tenant_id, email);
+        if self.db.remove(&user_key)?.is_some() {
+            self.db.flush()?;
+            self.log_audit_event(tenant_id, "user_removed", &format!("User {} removed", email)).await?;
+            Ok(())
+        } else {
+            Err(VaultError::Auth(format!("User {} not found", email)))
+        }
+    }
+    
+    pub async fn list_users(&self, tenant_id: &str) -> Result<Vec<User>> {
+        let prefix = format!("user:{}:", tenant_id);
+        let mut users = Vec::new();
+        
+        for result in self.db.scan_prefix(&prefix) {
+            let (_, data) = result?;
+            let user: User = bincode::deserialize(&data)?;
+            users.push(user);
+        }
+        
+        users.sort_by(|a, b| a.email.cmp(&b.email));
+        Ok(users)
+    }
+    
+    pub async fn change_user_role(&self, tenant_id: &str, email: &str, new_role: crate::auth::Role) -> Result<()> {
+        let user_key = format!("user:{}:{}", tenant_id, email);
+        if let Some(data) = self.db.get(&user_key)? {
+            let mut user: User = bincode::deserialize(&data)?;
+            let old_role = user.role.clone();
+            user.change_role(new_role.clone());
+            
+            let updated_data = bincode::serialize(&user)?;
+            self.db.insert(user_key, updated_data)?;
+            self.db.flush()?;
+            
+            self.log_audit_event(tenant_id, "role_changed", &format!("User {} role changed from {:?} to {:?}", email, old_role, new_role)).await?;
+            
+            Ok(())
+        } else {
+            Err(VaultError::Auth(format!("User {} not found", email)))
+        }
     }
 }
