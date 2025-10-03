@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroize;
+
 use secrecy::{Secret, ExposeSecret};
 use rand::{rngs::OsRng, RngCore};
 
@@ -13,7 +13,7 @@ mod envelope;
 pub use aes::*;
 pub use chacha::*;
 pub use kdf::*;
-pub use envelope::*;
+pub use envelope::{envelope_encrypt, envelope_decrypt, LocalKeyEncryptionKey};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EncryptionAlgorithm {
@@ -50,6 +50,7 @@ impl MasterKey {
         })
     }
     
+    #[allow(dead_code)]
     pub fn generate(algorithm: EncryptionAlgorithm) -> Self {
         let mut key_bytes = [0u8; 32];
         OsRng.fill_bytes(&mut key_bytes);
@@ -100,6 +101,7 @@ impl MasterKey {
         }
     }
     
+    #[allow(dead_code)]
     pub fn algorithm(&self) -> &EncryptionAlgorithm {
         &self.algorithm
     }
@@ -111,6 +113,7 @@ pub fn generate_salt() -> [u8; 32] {
     salt
 }
 
+#[allow(dead_code)]
 pub fn generate_nonce(size: usize) -> Vec<u8> {
     let mut nonce = vec![0u8; size];
     OsRng.fill_bytes(&mut nonce);

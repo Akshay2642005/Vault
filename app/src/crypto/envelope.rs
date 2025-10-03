@@ -12,11 +12,14 @@ pub struct EnvelopeEncryption {
     pub algorithm: EncryptionAlgorithm,
 }
 
+#[allow(dead_code)]
 pub struct DataEncryptionKey {
     key: [u8; 32],
+    #[allow(dead_code)]
     algorithm: EncryptionAlgorithm,
 }
 
+#[allow(dead_code)]
 impl DataEncryptionKey {
     pub fn generate(algorithm: EncryptionAlgorithm) -> Self {
         let mut key = [0u8; 32];
@@ -60,17 +63,20 @@ impl DataEncryptionKey {
     }
 }
 
+#[allow(dead_code)]
 pub trait KeyEncryptionKey {
     fn encrypt_dek(&self, dek: &DataEncryptionKey) -> Result<Vec<u8>>;
     fn decrypt_dek(&self, encrypted_dek: &[u8], algorithm: EncryptionAlgorithm) -> Result<DataEncryptionKey>;
     fn key_id(&self) -> String;
 }
 
+#[allow(dead_code)]
 pub struct LocalKeyEncryptionKey {
     master_key: MasterKey,
     id: String,
 }
 
+#[allow(dead_code)]
 impl LocalKeyEncryptionKey {
     pub fn new(master_key: MasterKey, id: String) -> Self {
         Self {
@@ -105,6 +111,7 @@ impl KeyEncryptionKey for LocalKeyEncryptionKey {
     }
 }
 
+#[allow(dead_code)]
 pub fn envelope_encrypt<K: KeyEncryptionKey>(
     kek: &K,
     plaintext: &[u8],
@@ -127,6 +134,7 @@ pub fn envelope_encrypt<K: KeyEncryptionKey>(
     })
 }
 
+#[allow(dead_code)]
 pub fn envelope_decrypt<K: KeyEncryptionKey>(
     kek: &K,
     envelope: &EnvelopeEncryption,

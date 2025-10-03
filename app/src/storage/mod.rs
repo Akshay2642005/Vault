@@ -15,7 +15,7 @@ mod session;
 mod audit;
 
 pub use tenant::*;
-pub use secret::*;
+pub use secret::{SecretGenerator};
 pub use session::*;
 pub use audit::*;
 

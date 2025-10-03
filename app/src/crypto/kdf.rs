@@ -55,6 +55,7 @@ pub fn derive_key_argon2id_with_params(
     Ok(key)
 }
 
+#[allow(dead_code)]
 pub fn derive_key_hkdf(input_key: &[u8], salt: &[u8], info: &[u8]) -> Result<[u8; 32]> {
     let hk = Hkdf::<Sha256>::new(Some(salt), input_key);
     let mut output = [0u8; 32];

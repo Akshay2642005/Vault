@@ -33,23 +33,20 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            app/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
-        run: |
-          cd app
-          cargo test --verbose
+        run: cargo test --verbose
+        working-directory: ./app
 
       - name: Check formatting
-        run: |
-          cd app
-          cargo fmt -- --check
+        run: cargo fmt -- --check
+        working-directory: ./app
 
       - name: Run clippy
-        run: |
-          cd app
-          cargo clippy -- -D warnings
+        run: cargo clippy -- -D warnings
+        working-directory: ./app
 
   build:
     needs: test
@@ -98,13 +95,12 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            app/target
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build release
-        run: |
-          cd app
-          cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
+        working-directory: ./app
 
       - name: Strip binary (Unix)
         if: matrix.os != 'windows-latest'
@@ -136,13 +132,12 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            app/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Publish to crates.io
-        run: |
-          cd app
-          cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+        working-directory: ./app
 
   create-release:
     needs: [test, build]

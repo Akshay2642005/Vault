@@ -109,6 +109,7 @@ impl Config {
         }
     }
     
+    #[allow(dead_code)]
     pub fn save(&self, config_path: Option<&str>) -> Result<()> {
         let path = match config_path {
             Some(p) => PathBuf::from(p),
@@ -132,6 +133,7 @@ impl Config {
         Ok(())
     }
     
+    #[allow(dead_code)]
     pub fn get_encryption_algorithm(&self) -> crate::crypto::EncryptionAlgorithm {
         match self.security.encryption_algorithm.as_str() {
             "chacha20poly1305" => crate::crypto::EncryptionAlgorithm::ChaCha20Poly1305,
@@ -139,6 +141,7 @@ impl Config {
         }
     }
     
+    #[allow(dead_code)]
     pub fn get_key_derivation_params(&self) -> crate::crypto::KeyDerivationParams {
         crate::crypto::KeyDerivationParams {
             memory_cost: self.security.key_derivation_memory_cost,

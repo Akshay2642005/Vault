@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     storage::Secret,
     error::Result,
-    sync::{ConflictInfo, ConflictType, SyncMetadata},
+    sync::{ConflictInfo, SyncMetadata},
 };
 
 pub async fn detect_conflicts(
