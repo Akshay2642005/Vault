@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -49,18 +49,18 @@ impl AuditEntry {
             metadata: None,
         }
     }
-    
+
     pub fn with_resource(mut self, resource_type: String, resource_id: String) -> Self {
         self.resource_type = Some(resource_type);
         self.resource_id = Some(resource_id);
         self
     }
-    
+
     pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
         self.metadata = Some(metadata);
         self
     }
-    
+
     pub fn with_context(mut self, ip_address: Option<String>, user_agent: Option<String>) -> Self {
         self.ip_address = ip_address;
         self.user_agent = user_agent;
@@ -86,7 +86,7 @@ impl AuditLogger {
     pub const EVENT_SYNC_PULL: &'static str = "sync_pull";
     pub const EVENT_EXPORT: &'static str = "export";
     pub const EVENT_IMPORT: &'static str = "import";
-    
+
     pub fn create_entry(
         tenant_id: &str,
         event_type: &str,
@@ -100,10 +100,10 @@ impl AuditLogger {
             user_id.to_string(),
         )
     }
-    
-    pub fn log_event(entry: &AuditEntry) -> crate::error::Result<()> {
+
+    pub fn log_event(_entry: &AuditEntry) -> crate::error::Result<()> {
         // In a real implementation, write to audit log storage
-        println!("[AUDIT] {} - {} - {}", entry.timestamp.format("%Y-%m-%d %H:%M:%S"), entry.event_type, entry.description);
+        // println!("[AUDIT] {} - {} - {}", entry.timestamp.format("%Y-%m-%d %H:%M:%S"), entry.event_type, entry.description);
         Ok(())
     }
 }

@@ -2,7 +2,7 @@
 # Copy this to ~/.config/vault/config.toml and customize
 
 # Local storage path (where encrypted secrets are stored)
-storage_path = "~/.vault/vault.db"
+storage_path = "C:/.vault/vault.db"
 
 # Default tenant ID (optional)
 tenant_id = "personal"
@@ -51,7 +51,7 @@ color_output = true
 progress_bars = true
 
 # Table format: "modern", "simple", "grid"
-table_format = "modern"
+table_format = "grid"
 
 # Date format for display
 date_format = "%Y-%m-%d %H:%M:%S UTC"

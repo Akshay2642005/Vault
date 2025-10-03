@@ -8,7 +8,9 @@ pub struct Config {
     pub storage_path: String,
     pub tenant_id: Option<String>,
     pub cloud: Option<CloudConfig>,
+    #[serde(default)]
     pub security: SecurityConfig,
+    #[serde(default)]
     pub ui: UiConfig,
 }
 
@@ -24,10 +26,12 @@ pub struct CloudConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "PascalCase")]
 pub enum CloudMode {
+    #[serde(alias = "none", alias = "None")]
     None,
+    #[serde(alias = "backup", alias = "Backup")]
     Backup,
+    #[serde(alias = "collaborative", alias = "Collaborative")]
     Collaborative,
 }
 
