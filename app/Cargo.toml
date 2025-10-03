@@ -24,6 +24,7 @@ path = "src/main.rs"
 [dependencies]
 # CLI & UX
 clap = { version = "4.4", features = ["derive", "env"] }
+clap_complete = "4.4"
 dialoguer = "0.11"
 indicatif = "0.17"
 owo-colors = "4.0"
@@ -65,7 +66,7 @@ sha2 = "0.10"
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
 
 # Database integration
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "chrono", "uuid"], optional = true }
+sqlx = { version = "0.7", features = ["sqlite", "postgres", "runtime-tokio-rustls", "chrono", "uuid"], optional = true }
 
 # Cloud storage
 aws-sdk-s3 = { version = "1.0", optional = true }
@@ -80,6 +81,7 @@ tokio-test = "0.4"
 [features]
 default = ["cloud-sync"]
 cloud-sync = ["sqlx", "aws-sdk-s3", "aws-config"]
+sqlite = ["sqlx"]
 postgres = ["sqlx"]
 s3 = ["aws-sdk-s3", "aws-config"]
 

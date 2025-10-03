@@ -34,7 +34,7 @@ pub struct ConflictInfo {
     pub namespace: String,
     pub local_version: u64,
     pub remote_version: u64,
-    pub conflict_type: ConflictType,
+    pub conflict_type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -43,6 +43,8 @@ pub enum ConflictType {
     DeletedLocal,
     DeletedRemote,
 }
+
+
 
 pub struct SyncManager {
     backend: SyncBackend,
@@ -55,6 +57,10 @@ impl SyncManager {
     }
     
     pub fn from_config(config: &CloudConfig, storage: VaultStorage) -> Result<Self> {
+        if !config.enabled {
+            return Err(VaultError::Config("Cloud sync is disabled".to_string()));
+        }
+        
         let backend = match &config.backend {
             crate::config::CloudBackend::S3 => {
                 let bucket = config.bucket.as_ref()
@@ -69,15 +75,6 @@ impl SyncManager {
                     .ok_or_else(|| VaultError::Config("Database URL not configured".to_string()))?;
                 SyncBackend::Postgres {
                     url: url.clone(),
-                }
-            }
-            crate::config::CloudBackend::Both => {
-                // Default to S3 for now
-                let bucket = config.bucket.as_ref()
-                    .ok_or_else(|| VaultError::Config("S3 bucket not configured".to_string()))?;
-                SyncBackend::S3 {
-                    bucket: bucket.clone(),
-                    region: config.region.clone(),
                 }
             }
         };
@@ -135,7 +132,8 @@ impl SyncManager {
     }
     
     async fn get_local_secrets(&self) -> Result<HashMap<String, Secret>> {
-        // TODO: Implement getting all local secrets
+        // This would need access to storage internals
+        // For now, return empty map as placeholder
         Ok(HashMap::new())
     }
 }

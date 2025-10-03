@@ -1,0 +1,62 @@
+# Vault Configuration File
+# Copy this to ~/.config/vault/config.toml and customize
+
+# Local storage path (where encrypted secrets are stored)
+storage_path = "~/.vault/vault.db"
+
+# Default tenant ID (optional)
+tenant_id = "my-organization"
+
+# Cloud synchronization configuration (optional)
+# Set to false to disable all cloud sync/backup
+[cloud_sync]
+enabled = true
+# Backend type: "S3" or "Postgres" (SQLite is local-only)
+backend = "S3"
+
+# AWS region for S3 backend
+region = "us-east-1"
+
+# S3 bucket name (required for S3 backend)
+bucket = "my-vault-secrets"
+
+# Database URL (required for Postgres backend)
+# For Postgres: "postgresql://user:password@localhost/vault"
+# database_url = "postgresql://vault:password@localhost/vault_sync"
+
+# Optional: Enable envelope encryption (will prompt for KMS key)
+# envelope_encryption = true
+
+# Sync interval in minutes (for auto-sync)
+sync_interval_minutes = 30
+
+# Security configuration
+[security]
+# Encryption algorithm: "aes256gcm" or "chacha20poly1305"
+encryption_algorithm = "aes256gcm"
+
+# Argon2id key derivation parameters
+# Higher values = more secure but slower
+key_derivation_memory_cost = 65536  # 64 MB
+key_derivation_time_cost = 3
+key_derivation_parallelism = 1
+
+# Session timeout in hours
+session_timeout_hours = 24
+
+# Require two-factor authentication (not yet implemented)
+require_2fa = false
+
+# UI configuration
+[ui]
+# Enable colored output
+color_output = true
+
+# Show progress bars
+progress_bars = true
+
+# Table format: "modern", "simple", "grid"
+table_format = "modern"
+
+# Date format for display
+date_format = "%Y-%m-%d %H:%M:%S UTC"

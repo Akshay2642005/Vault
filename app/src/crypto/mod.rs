@@ -13,7 +13,7 @@ mod envelope;
 pub use aes::*;
 pub use chacha::*;
 pub use kdf::*;
-pub use envelope::{envelope_encrypt, envelope_decrypt, LocalKeyEncryptionKey};
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EncryptionAlgorithm {

@@ -14,11 +14,12 @@ pub struct Config {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloudConfig {
+    pub enabled: bool,
     pub backend: CloudBackend,
     pub region: String,
     pub bucket: Option<String>,
     pub database_url: Option<String>,
-    pub kms_key_id: Option<String>,
+    pub envelope_encryption: Option<bool>,
     pub sync_interval_minutes: Option<u64>,
 }
 
@@ -26,7 +27,6 @@ pub struct CloudConfig {
 pub enum CloudBackend {
     S3,
     Postgres,
-    Both,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

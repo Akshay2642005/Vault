@@ -1,26 +1,43 @@
 use std::collections::HashMap;
-
 use crate::{
     storage::Secret,
-    error::Result,
     sync::{ConflictInfo, SyncMetadata},
+    error::Result,
 };
 
+#[derive(Debug, Clone)]
+pub enum ConflictType {
+    ModifiedBoth,
+    DeletedLocal,
+    DeletedRemote,
+}
+
 pub async fn detect_conflicts(
-    _local_secrets: &HashMap<String, Secret>,
-    _remote_metadata: &SyncMetadata,
+    local_secrets: &HashMap<String, Secret>,
+    remote_metadata: &SyncMetadata,
 ) -> Result<Vec<ConflictInfo>> {
-    let conflicts = Vec::new();
+    let mut conflicts = Vec::new();
     
-    // TODO: Implement conflict detection logic
-    // 1. Compare local and remote versions
-    // 2. Detect modifications on both sides
-    // 3. Detect deletions
-    // 4. Create conflict info for resolution
+    // Simple conflict detection based on version comparison
+    for (key, secret) in local_secrets {
+        if secret.metadata.version != remote_metadata.sync_version {
+            let parts: Vec<&str> = key.split(':').collect();
+            if parts.len() >= 4 {
+                conflicts.push(ConflictInfo {
+                    secret_key: parts[3].to_string(),
+                    namespace: parts[2].to_string(),
+                    local_version: secret.metadata.version,
+                    remote_version: remote_metadata.sync_version,
+                    conflict_type: "ModifiedBoth".to_string(),
+                });
+            }
+        }
+    }
     
     Ok(conflicts)
 }
 
+#[derive(Debug)]
 pub enum ConflictResolution {
     UseLocal,
     UseRemote,
@@ -32,70 +49,49 @@ pub struct ConflictResolver;
 
 impl ConflictResolver {
     pub fn resolve_conflict(
-        _conflict: &ConflictInfo,
-        resolution: ConflictResolution,
-    ) -> Result<Option<Secret>> {
-        match resolution {
-            ConflictResolution::UseLocal => {
-                // Keep local version
-                Ok(None) // TODO: Return local secret
-            }
-            ConflictResolution::UseRemote => {
-                // Use remote version
-                Ok(None) // TODO: Return remote secret
-            }
+        local_secret: &Secret,
+        remote_secret: &Secret,
+        strategy: ConflictResolution,
+    ) -> Result<Secret> {
+        match strategy {
+            ConflictResolution::UseLocal => Ok(local_secret.clone()),
+            ConflictResolution::UseRemote => Ok(remote_secret.clone()),
             ConflictResolution::Merge => {
-                // Attempt to merge (complex logic)
-                Ok(None) // TODO: Implement merge logic
+                // Simple merge: use newer timestamp
+                if local_secret.metadata.updated_at > remote_secret.metadata.updated_at {
+                    Ok(local_secret.clone())
+                } else {
+                    Ok(remote_secret.clone())
+                }
             }
-            ConflictResolution::Skip => {
-                // Don't resolve, keep conflict
-                Ok(None)
-            }
+            ConflictResolution::Skip => Ok(local_secret.clone()),
         }
     }
-    
+
     pub fn auto_resolve_conflicts(
         conflicts: &[ConflictInfo],
         strategy: AutoResolveStrategy,
-    ) -> Vec<(ConflictInfo, ConflictResolution)> {
-        conflicts
-            .iter()
-            .cloned()
-            .map(|conflict| {
-                let resolution = match strategy {
-                    AutoResolveStrategy::PreferLocal => ConflictResolution::UseLocal,
-                    AutoResolveStrategy::PreferRemote => ConflictResolution::UseRemote,
-                    AutoResolveStrategy::PreferNewer => {
-                        // TODO: Compare timestamps and choose newer
-                        ConflictResolution::UseLocal
-                    }
-                    AutoResolveStrategy::Manual => ConflictResolution::Skip,
-                };
-                (conflict, resolution)
-            })
-            .collect()
+    ) -> Result<Vec<(ConflictInfo, ConflictResolution)>> {
+        let mut resolutions = Vec::new();
+        
+        for conflict in conflicts {
+            let resolution = match strategy {
+                AutoResolveStrategy::PreferLocal => ConflictResolution::UseLocal,
+                AutoResolveStrategy::PreferRemote => ConflictResolution::UseRemote,
+                AutoResolveStrategy::PreferNewer => ConflictResolution::Merge,
+                AutoResolveStrategy::Manual => ConflictResolution::Skip,
+            };
+            resolutions.push((conflict.clone(), resolution));
+        }
+        
+        Ok(resolutions)
     }
 }
 
+#[derive(Debug)]
 pub enum AutoResolveStrategy {
     PreferLocal,
     PreferRemote,
     PreferNewer,
     Manual,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_conflict_detection() {
-        // TODO: Add tests for conflict detection
-    }
-    
-    #[test]
-    fn test_conflict_resolution() {
-        // TODO: Add tests for conflict resolution
-    }
 }

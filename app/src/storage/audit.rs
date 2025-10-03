@@ -99,4 +99,10 @@ impl AuditLogger {
             user_id.to_string(),
         )
     }
+    
+    pub fn log_event(entry: &AuditEntry) -> crate::error::Result<()> {
+        // In a real implementation, write to audit log storage
+        println!("[AUDIT] {} - {} - {}", entry.timestamp.format("%Y-%m-%d %H:%M:%S"), entry.event_type, entry.description);
+        Ok(())
+    }
 }

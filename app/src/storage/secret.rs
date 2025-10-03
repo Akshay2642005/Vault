@@ -98,4 +98,15 @@ impl SecretGenerator {
             None => format!("vk_{}", random_part),
         }
     }
+    
+    pub fn generate_uuid() -> String {
+        uuid::Uuid::new_v4().to_string()
+    }
+    
+    pub fn generate_hex_key(length: usize) -> String {
+        use rand::RngCore;
+        let mut bytes = vec![0u8; length / 2];
+        rand::thread_rng().fill_bytes(&mut bytes);
+        hex::encode(bytes)
+    }
 }

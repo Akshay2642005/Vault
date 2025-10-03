@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use std::path::Path;
 
 use crate::{
-    crypto::{MasterKey, EncryptedData, EncryptionAlgorithm, generate_salt},
+    crypto::{MasterKey, EncryptedData, generate_salt},
     error::{VaultError, Result},
 };
 
@@ -15,8 +15,8 @@ mod session;
 mod audit;
 
 pub use tenant::*;
-pub use secret::{SecretGenerator};
-pub use session::*;
+pub use secret::SecretGenerator;
+
 pub use audit::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -100,7 +100,7 @@ impl VaultStorage {
         let master_key = MasterKey::derive_from_passphrase(
             passphrase, 
             &tenant.salt, 
-            EncryptionAlgorithm::Aes256Gcm
+            crate::crypto::EncryptionAlgorithm::Aes256Gcm
         ).map_err(|e| VaultError::Crypto(e.to_string()))?;
         
         // Test the key by trying to decrypt a test value
