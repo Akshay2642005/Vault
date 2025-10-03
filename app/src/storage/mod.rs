@@ -336,10 +336,10 @@ impl VaultStorage {
         
         if let Some(retrieved) = self.db.get(test_key)? {
             if retrieved != test_value {
-                return Err(VaultError::Storage(sled::Error::Corruption { at: None }));
+                return Err(VaultError::Crypto("Health check failed: data corruption".to_string()));
             }
         } else {
-            return Err(VaultError::Storage(sled::Error::Corruption { at: None }));
+            return Err(VaultError::Crypto("Health check failed: data not found".to_string()));
         }
         
         self.db.remove(test_key)?;
@@ -366,9 +366,14 @@ impl VaultStorage {
             description: description.to_string(),
             timestamp: Utc::now(),
             user_id: "system".to_string(), // TODO: Get from session
+            ip_address: None,
+            user_agent: None,
+            resource_type: None,
+            resource_id: None,
+            metadata: None,
         };
         
-        let key = format!("audit:{}:{}", tenant_id, audit_entry.timestamp.timestamp_nanos());
+        let key = format!("audit:{}:{}", tenant_id, audit_entry.timestamp.timestamp_nanos_opt().unwrap_or(0));
         let value = bincode::serialize(&audit_entry)?;
         self.db.insert(key, value)?;
         

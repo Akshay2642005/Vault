@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 use secrecy::{Secret, ExposeSecret};
 use rand::{rngs::OsRng, RngCore};
 
-use crate::error::{VaultError, Result};
+use crate::error::Result;
 
 mod aes;
 mod chacha;
@@ -30,7 +30,6 @@ pub struct EncryptedData {
     pub version: u8,
 }
 
-#[derive(ZeroizeOnDrop)]
 pub struct MasterKey {
     key: Secret<[u8; 32]>,
     algorithm: EncryptionAlgorithm,

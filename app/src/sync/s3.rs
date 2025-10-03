@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{
-    storage::{Secret, VaultStorage},
+    storage::VaultStorage,
     error::{VaultError, Result},
-    sync::{SyncResult, SyncMetadata, ConflictInfo},
+    sync::{SyncResult, SyncMetadata},
 };
 
 pub async fn s3_push(

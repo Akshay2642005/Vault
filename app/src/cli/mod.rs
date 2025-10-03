@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use owo_colors::OwoColorize;
+// use owo_colors::OwoColorize; // TODO: Use for colored output
 use anyhow::Result;
 
 mod commands;

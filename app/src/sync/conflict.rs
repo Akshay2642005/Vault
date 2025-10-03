@@ -7,10 +7,10 @@ use crate::{
 };
 
 pub async fn detect_conflicts(
-    local_secrets: &HashMap<String, Secret>,
-    remote_metadata: &SyncMetadata,
+    _local_secrets: &HashMap<String, Secret>,
+    _remote_metadata: &SyncMetadata,
 ) -> Result<Vec<ConflictInfo>> {
-    let mut conflicts = Vec::new();
+    let conflicts = Vec::new();
     
     // TODO: Implement conflict detection logic
     // 1. Compare local and remote versions
@@ -32,7 +32,7 @@ pub struct ConflictResolver;
 
 impl ConflictResolver {
     pub fn resolve_conflict(
-        conflict: &ConflictInfo,
+        _conflict: &ConflictInfo,
         resolution: ConflictResolution,
     ) -> Result<Option<Secret>> {
         match resolution {
@@ -61,6 +61,7 @@ impl ConflictResolver {
     ) -> Vec<(ConflictInfo, ConflictResolution)> {
         conflicts
             .iter()
+            .cloned()
             .map(|conflict| {
                 let resolution = match strategy {
                     AutoResolveStrategy::PreferLocal => ConflictResolution::UseLocal,
@@ -71,7 +72,7 @@ impl ConflictResolver {
                     }
                     AutoResolveStrategy::Manual => ConflictResolution::Skip,
                 };
-                (conflict.clone(), resolution)
+                (conflict, resolution)
             })
             .collect()
     }

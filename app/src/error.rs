@@ -11,11 +11,17 @@ pub enum VaultError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     
+    #[error("Chrono error: {0}")]
+    Chrono(String),
+    
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     
     #[error("Crypto error: {0}")]
     Crypto(String),
+    
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8(#[from] std::string::FromUtf8Error),
     
     #[error("Authentication error: {0}")]
     Auth(String),

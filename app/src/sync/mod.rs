@@ -28,7 +28,7 @@ pub struct SyncMetadata {
     pub conflicts: Vec<ConflictInfo>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConflictInfo {
     pub secret_key: String,
     pub namespace: String,
@@ -37,7 +37,7 @@ pub struct ConflictInfo {
     pub conflict_type: ConflictType,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ConflictType {
     ModifiedBoth,
     DeletedLocal,
