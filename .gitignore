@@ -1,0 +1,59 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Vault specific
+*.db
+*.db-*
+.vault/
+config/vault.toml
+session
+*.log
+
+# Build artifacts
+/app/target/
+/website/dist/
+/website/node_modules/
+/website/.next/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Documentation build
+/docs/_build/
+/docs/.doctrees/
+
+# Test artifacts
+/test.code/dev-*/vault
+/test.code/dev-*/config/
+/test.code/dev-*/data/
+
+# Secrets (never commit)
+*.key
+*.pem
+secrets.json
+credentials.json
